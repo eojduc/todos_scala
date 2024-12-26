@@ -1,23 +1,18 @@
 package view
 
-import cats.effect.IO
 import org.http4s.headers.`Content-Type`
-import org.http4s.{Headers, MediaType, Request, Response, Status}
+import org.http4s.MediaType
 import scalatags.Text.all.Frag
-
-extension (request: Request[IO])
-  def getCookie(name: String): Option[String] = request.cookies.find(_.name == name).map(_.content)
+import model.Response
 
 extension (html: Frag)
-  def toResponse: Response[IO] =
-    Response[IO](
-      status = Status.Ok,
-      headers = Headers(`Content-Type`(MediaType.text.html)),
-      body = fs2.Stream(html.render).through(fs2.text.utf8.encode)
-    )
+  def toResponse: Response =
+    Response.ok(
+      fs2.Stream(html.render).through(fs2.text.utf8.encode)
+    ).withContentType(`Content-Type`(MediaType.text.html))
 
 object View:
-      
+
   import scalatags.Text.all.*
   def layout(content: Frag): Frag =
     html(
@@ -26,11 +21,7 @@ object View:
         script(src := "https://unpkg.com/htmx.org@2.0.4"),
       ),
       body(
-        `class` := "bg-gray-50 text-gray-800 font-sans",
+        `class` := "bg-gray-50",
         content
       )
     )
-
-
-
-

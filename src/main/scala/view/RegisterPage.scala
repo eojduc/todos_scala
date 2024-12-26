@@ -1,59 +1,56 @@
 package view
 
 import cats.effect.IO
-import model.User
-import org.http4s.headers.Location
-import org.http4s.implicits.{path, uri}
-import org.http4s.{Headers, Query, Request, Response, Status, Uri, UrlForm}
+import cats.syntax.applicative.*
+import org.http4s.implicits.{uri}
 import scalatags.Text.all.*
+import database.Users
+import database.Connection
+import model.Uri.withError
+import model.Request.getForm
+import model.Response.*
+import model.{User, Request, Response}
 
 
 
 object RegisterPage:
-  def get(req: Request[IO]): IO[Response[IO]] =
+  def get(req: Request): Response =
     val message = req.params.get("error")
-    val body = View.layout(
+    page(message).toResponse
+
+
+  def post(req: Request): IO[Connection[Response]] =
+    for form <- req.getForm
+    yield for
+      users <- Users.findAll
+      res <- (form.getFirst("username"), form.getFirst("password")) match
+        case (Some(username), Some(password)) =>
+          users.collect({ case u: User.Normal => u})
+            .find(_.username == username) match
+            case Some(_) => Response.redirect(
+                uri"/register".withError("Username already exists")
+              ).pure[Connection]
+            case None => for _ <- Users.insert(Users.Insert.Normal(username, password))
+              yield Response.redirect(uri"/")
+                .withCookies(
+                  "userType" -> "normal",
+                  "username" -> username,
+                  "password" -> password
+                )
+        case _ => Response.redirect(uri"/register".withError("Invalid form")).pure[Connection]
+    yield res
+  def page(message: Option[String]): Frag =
+    View.layout(
       div(
         `class` := "container flex flex-col items-center",
         h1(`class` := "text-3xl font-bold mb-8", "Register"),
-        message.map(msg => h2(`class` := "text-red-500 mb-4", msg)).getOrElse(()),
-        submitForm,
+        message match
+          case Some(msg) => h2(`class` := "text-red-500 mb-4", msg)
+          case None => (),
+          submitForm,
         loginButtons
       )
     )
-    IO.pure(body.toResponse)
-
-  def post(req: Request[IO]): IO[Response[IO]] =
-    for form <- req.as[UrlForm]
-      users <- User.findAll
-      insertOption: Option[User.Insert.Normal] =
-        for username <- form.getFirst("username")
-            password <- form.getFirst("password")
-        yield User.Insert.Normal(username, password)
-      res <- insertOption match
-        case None =>
-          IO.pure(Response[IO](
-            status = Status.SeeOther,
-            headers = Headers(Location(Uri(
-              path = path"/register",
-              query = Query("error" -> Some("Invalid form"))
-            )))
-          ))
-        case Some(insert) =>
-          if users.collectFirst({ case u: User.Normal if u.username == insert.username => u }).isDefined then
-            val uri = Uri(
-              path = path"/register",
-              query = Query("error" -> Some("Username already exists"))
-            )
-            IO.pure(Response[IO](Status.SeeOther).putHeaders(Location(uri)))
-          else
-            for _ <- User.insert(insert)
-            yield Response[IO](Status.SeeOther)
-              .putHeaders(Location(uri"/login"))
-              .addCookie("userType", "normal")
-              .addCookie("username", insert.username)
-              .addCookie("password", insert.password)
-    yield res
 
   private def submitForm: Frag =
     form(

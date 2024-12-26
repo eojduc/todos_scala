@@ -16,9 +16,13 @@ libraryDependencies ++= Seq(
     "org.http4s" %% "http4s-dsl" % http4sVersion,
     "org.http4s" %% "http4s-ember-server" % http4sVersion,
     "org.http4s" %% "http4s-ember-client" % http4sVersion,
+    "org.http4s" %% "http4s-circe" % http4sVersion,
 
     "org.tpolecat" %% "doobie-core"     % doobieVersion,
     "org.tpolecat" %% "doobie-postgres" % doobieVersion,
+
+
+    "io.circe" %% "circe-generic" % "0.14.8",
 
     "com.lihaoyi" %% "scalatags" % "0.13.1",
 )

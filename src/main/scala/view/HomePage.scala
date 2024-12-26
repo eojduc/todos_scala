@@ -1,172 +1,128 @@
 package view
 
 import cats.effect.IO
-import model.{User, *}
-import org.http4s.headers.Location
-import org.http4s.implicits.{path, uri}
-import org.http4s.{Query, Request, Response, Status, Uri, UrlForm}
-import scalatags.Text.all.{id, *}
+import database.Users
+import database.Todos
+import database.Connection
+import model.{Request, Response, Todo, User}
+import org.http4s.implicits.uri
+import org.http4s.{EntityDecoder, HttpRoutes, Status, Uri, UrlForm}
+import scalatags.Text.all.*
+import model.Uri.*
+import model.User.*
+import model.Request.*
+import model.Response.*
+import cats.syntax.applicative.*
+import model.Client
+import model.Quote
+import model.Quote.*
+
 object HomePage:
-
-  def logout: IO[Response[IO]] =
-    IO.pure(Response(Status.SeeOther)
-    .putHeaders(Location(uri"/login"))
-    .removeCookie("userType")
-    .removeCookie("username")
-    .removeCookie("password")
-    .removeCookie("code"))
-
-  def get(req: Request[IO]): IO[Response[IO]] =
-    for
-      users <- User.findAll
-      todos <- Todo.findAll
-    yield req.getCookie("userType") match
-      case Some("admin") => getAllTodos(req, todos, users)
-      case Some("normal") => getUserTodos(req, todos, users)
-      case _ => Response(Status.SeeOther)
-        .putHeaders(Location(uri"/login"))
-        .removeCookie("userType")
+  def logout: Response =
+    Response.redirect(uri"/login")
+      .removeCookies("userType", "username", "password", "code")
 
 
-  def toggle(id: Int): IO[Response[IO]] =
-    for todoOption <- Todo.find(id)
+  def get(request: Request, client: Client): IO[Connection[Response]] =
+    for quote <- Quote.getOne(client)
+    yield for users <- Users.findAll
+      todos <- Todos.findAll
+    yield request.getUser(users) match
+      case None => Response.redirect(uri"/login")
+        .removeCookies("userType", "username", "password", "code")
+      case Some(user) => page(user, todos, quote).toResponse
+
+
+  def toggle(id: Int): Connection[Response] =
+    for todoOption <- Todos.find(id)
       res <- todoOption match
-        case Some(todo) => for _ <- Todo.update(todo.toggle) yield todo.toggle.toHtml.toResponse
-        case None => IO.pure(Response(Status.NotFound))
+        case Some(todo) =>
+          for _ <- Todos.update(todo.toggle)
+          yield todoCard(todo.toggle).toResponse
+        case None => Response(Status.NotFound).pure[Connection]
     yield res
 
-  def post(req: Request[IO]): IO[Response[IO]] =
+
+  def post(req: Request): IO[Connection[Response]] =
     for form <- req.as[UrlForm]
-      users <- User.findAll
-      normalUsers = users.collect({ case u: User.Normal => u })
-      userOption =
-        for username <- req.getCookie("username")
-            password <- req.getCookie("password")
-            user <- normalUsers.collectFirst({ case u if u.username == username && u.password == password => u })
-        yield user
-      res <- userOption match
-        case None =>
-          val uri = Uri(
-            path = path"/login",
-            query = Query("error" -> Some("Invalid user"))
-          )
-          IO.pure(Response[IO](Status.SeeOther)
-            .putHeaders(Location(uri)))
-        case Some(user) =>
-          val createOption = for
-            title <- form.getFirst("title")
-            ownerId <- form.getFirst("ownerId").flatMap(_.toIntOption)
-            complete <- form.getFirst("complete").flatMap(_.toBooleanOption)
-          yield (title, complete, ownerId)
-          createOption match
-            case None => IO.pure(Response(Status.BadRequest))
-            case Some((title, complete, ownerId)) =>
-              for _ <- Todo.create(title, complete, ownerId)
-                  todos <- Todo.findAll
-              yield todos.filter(_.ownerId == user.id).toHtml.toResponse
+    yield for
+      users <- Users.findAll
+      res <- req.getUser(users) match
+        case None => Response
+          .redirect(uri"/login".withError("Log in to create a todo."))
+          .removeCookies("userType", "username", "password")
+          .pure[Connection]
+        case Some(user) => form.getFirst("title") match
+          case None => Response(Status.BadRequest).pure[Connection]
+          case Some(title) =>
+            for _ <- Todos.create(title, false, user.id)
+              todos <- Todos.findAll
+            yield
+              val myTodos = todos.filter(_.ownerId == user.id)
+              todoList(myTodos).toResponse
     yield res
 
 
-  extension (todo: Todo)
-    private def toHtml: Frag =
+  private def page(user: User, todos: List[Todo], quote: Quote): Frag =
+    View.layout(
       div(
-        `class` := "bg-white shadow-md rounded-lg p-4 my-4 w-3/5",
-        h1(`class` := "text-lg font-semibold my-2", todo.title),
-        input(
-          `class` := "mr-2",
-          `type` := "checkbox",
-          attr("hx-post") := s"/todo/${todo.id}/toggle",
-          attr("hx-trigger") := "change",
-          attr("hx-target") := s"#todo-${todo.id}",
-          if todo.complete then checked else ()
-        ),
-        p(`class` := "text-gray-600", if todo.complete then "Completed" else "Not completed")
+        `class` := "container flex flex-col items-center",
+        header(user),
+        motivationalQuote(quote),
+        title,
+        user match
+          case _: User.Admin => todoList(todos)
+          case normal: User.Normal =>
+            val myTodos = todos.filter(_.ownerId == normal.id)
+            List(todoList(myTodos), newTodoForm(normal))
       )
-  extension (todos: List[Todo])
-    private def toHtml: Frag =
-      div(
-        `class` := "flex flex-col items-center w-full",
-        for todo <- todos yield div(`class` := "contents", id := s"todo-${todo.id}", todo.toHtml)
-      )
+    )
 
+  private def motivationalQuote(quote: Quote): Frag =
+    div(
+      `class` := "bg-white shadow-md rounded-lg p-4 my-4 w-3/5",
+      p(`class` := "text-lg font-semibold my-2", quote.q),
+      p(`class` := "text-gray-600", "-" ++ quote.a)
+    )
+  private def title: Frag = h1(`class` := "text-3xl font-bold mb-8", "Todo List")
 
-  private def getAllTodos(req: Request[IO], todos: List[Todo], users: List[User]): Response[IO] =
-    val userOption =
-      for code <- req.getCookie("code")
-          user <- users.collectFirst({ case u: User.Admin if u.code == code => u })
-      yield user
-    userOption match
-      case None => Response(Status.SeeOther)
-        .putHeaders(Location(uri"/login"))
-        .removeCookie("userType")
-        .removeCookie("code")
-      case Some(user) =>
-        View.layout(
-          div(
-            `class` := "container flex flex-col items-center",
-            header(user),
-            h1(`class` := "text-3xl font-bold mb-8", "Todo List"),
-            div(
-              id := "todos",
-              `class` := "contents",
-              todos.toHtml,
-            )
-          )
-        ).toResponse
+  private def todoCard(todo: Todo): Frag =
+    div(
+      `class` := "bg-white shadow-md rounded-lg p-4 my-4 w-3/5",
+      id := s"todo-${todo.id}",
+      h1(`class` := "text-lg font-semibold my-2", todo.title),
+      input(
+        `class` := "mr-2",
+        `type` := "checkbox",
+        attr("hx-post") := s"/todo/${todo.id}/toggle",
+        attr("hx-trigger") := "change",
+        attr("hx-target") := s"#todo-${todo.id}",
+        attr("hx-swap") := "outerHTML",
+        if todo.complete then checked else ()
+      ),
+      p(`class` := "text-gray-600", if todo.complete then "Completed" else "Not completed")
+    )
+  private def todoList(todos: List[Todo]): Frag =
+    div(
+      `class` := "flex flex-col items-center w-full",
+      id := "todos",
+      for todo <- todos yield todoCard(todo)
+    )
 
-
-  private def getUserTodos(req: Request[IO], todos: List[Todo], users: List[User]): Response[IO] =
-    val userOption =
-      for username <- req.getCookie("username")
-          password <- req.getCookie("password")
-          user <- users.collectFirst({ case u: User.Normal if u.username == username && u.password == password => u })
-      yield user
-    userOption match
-      case None => Response(Status.SeeOther)
-        .putHeaders(Location(uri"/login"))
-        .removeCookie("userType")
-        .removeCookie("username")
-        .removeCookie("password")
-      case Some(user) =>
-        val myTodos = todos.filter(_.ownerId == user.id)
-        View.layout(
-          div(
-            `class` := "container flex flex-col items-center",
-            header(user),
-            h1(`class` := "text-3xl font-bold mb-8", "Todo List"),
-            div(
-              id := "todos",
-              `class` := "contents",
-              myTodos.toHtml,
-            ),
-            newTodoForm(user.id.toString)
-          )
-        ).toResponse
-
-
-  private def newTodoForm(id: String): Frag =
+  private def newTodoForm(user: User.Normal): Frag =
     div(
       `class` := "bg-white shadow-md rounded-lg p-4 my-4 w-3/5",
       form(
         `class` := "flex",
-        attr("hx-post") := "/todo",
+        attr("hx-post") := s"/todo",
         attr("hx-trigger") := "submit",
         attr("hx-target") := "#todos",
+        attr("hx-swap") := "outerHTML",
         input(
           `class` := "p-2 border rounded-lg",
           `type` := "text",
           name := "title",
           placeholder := "New todo"
-        ),
-        input(
-          `type` := "hidden",
-          name := "ownerId",
-          value := id
-        ),
-        input(
-          `type` := "hidden",
-          name := "complete",
-          value := "false"
         ),
         input(
           `type` := "submit",

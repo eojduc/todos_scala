@@ -1,57 +1,49 @@
 package view
 
 import cats.effect.IO
-import model.User
-import org.http4s.headers.Location
-import org.http4s.implicits.{path, uri}
-import org.http4s.{Headers, Query, Request, Response, Status, Uri, UrlForm}
+import database.Users
+import model.{Request, Response, User}
+import org.http4s.implicits.uri
 import scalatags.Text.all.*
+import database.Connection
+import model.Uri.withError
+import model.Request.getForm
+import model.Response.*
+import model.User.*
+
 
 
 object AdminLoginPage:
-  def get(req: Request[IO]): IO[Response[IO]] =
-    val message = req.params.get("error")
-    def body = View.layout(
+  def get(req: Request): Response = page(req.params.get("error")).toResponse
+
+  def post(req: Request): IO[Connection[Response]] =
+    for form <- req.getForm
+    yield for users <- Users.findAll
+    yield form.getFirst("code") match
+      case None => Response.redirect(uri"/admin-login".withError("Invalid form"))
+      case Some(code) => users.findAdmin(code) match
+        case None =>
+          Response.redirect(uri"/admin-login".withError("Invalid code"))
+        case Some(user) =>
+          Response.redirect(uri"/")
+            .withCookies(
+              "userType" -> "admin",
+              "code" -> user.code
+            )
+  
+  private def page(message: Option[String]): Frag =
+    View.layout(
       div(
         `class` := "container flex flex-col items-center",
         h1(`class` := "text-3xl font-bold mb-8", "Admin Login"),
-        message.map(h2(`class` := "text-red-500 mb-4", _)).getOrElse(()),
+        message match
+          case Some(msg) => div(`class` := "text-red-500 mb-4", msg)
+          case None => (),
         adminLoginForm,
-        loginButtons
+        linksToOtherPages
       )
     )
-    IO.pure(body.toResponse)
-
-  def post(req: Request[IO]): IO[Response[IO]] =
-    for form <- req.as[UrlForm]
-      users <- User.findAll
-      codeOption = form.getFirst("code")
-      res <- codeOption match
-        case None => IO.pure(Response[IO](Status.SeeOther)
-          .putHeaders(Location(uri"/admin-login"))
-          .addCookie("error", "Invalid form"))
-        case Some(code) =>
-          val userOption = users.collectFirst({ case u: User.Admin if u.code == code => u })
-          userOption match
-            case None =>
-              val uri = Uri(
-                path = path"/admin-login",
-                query = Query("error" -> Some("Invalid code"))
-              )
-              IO.pure(Response[IO](Status.SeeOther)
-                .putHeaders(Location(uri)))
-            case Some(user) =>
-              val response = Response[IO](
-                status = Status.SeeOther,
-                headers = Headers(Location(uri"/"))
-              )
-                .addCookie("userType", "admin")
-                .addCookie("code", user.code)
-              IO.pure(response)
-    yield res
-
-
-  private def loginButtons: Frag =
+  private def linksToOtherPages: Frag =
     div(
       `class` := "flex",
       a(
