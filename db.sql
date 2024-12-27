@@ -1,6 +1,6 @@
-drop table if exists todos cascade;
-drop table if exists admin_users cascade;
-drop table if exists normal_users cascade;
+-- drop table if exists todos cascade;
+-- drop table if exists admin_users cascade;
+-- drop table if exists normal_users cascade;
 
 create table normal_users (
     id serial primary key,

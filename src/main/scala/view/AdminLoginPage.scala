@@ -1,23 +1,27 @@
 package view
 
 import cats.effect.IO
-import database.Users
+import database.{Connection, Db, Users}
 import model.{Request, Response, User}
 import org.http4s.implicits.uri
 import scalatags.Text.all.*
-import database.Connection
 import model.Uri.withError
 import model.Request.getForm
 import model.Response.*
 import model.User.*
-
-
-
+import org.http4s.HttpRoutes
+import org.http4s.dsl.io.*
+import cats.syntax.all.*
+import doobie.implicits.*
 object AdminLoginPage:
-  def get(req: Request): Response = page(req.params.get("error")).toResponse
 
-  def post(req: Request): IO[Connection[Response]] =
-    for form <- req.getForm
+  def routes(db: Db): HttpRoutes[IO] = HttpRoutes.of[IO]:
+    case req @ GET -> Root => get(req).pure[IO]
+    case req @ POST -> Root => post(req).flatMap(_.transact(db))
+  def get(request: Request): Response = page(request.params.get("error")).toResponse
+
+  def post(request: Request): IO[Connection[Response]] =
+    for form <- request.getForm
     yield for users <- Users.findAll
     yield form.getFirst("code") match
       case None => Response.redirect(uri"/admin-login".withError("Invalid form"))
@@ -35,7 +39,7 @@ object AdminLoginPage:
     View.layout(
       div(
         `class` := "container flex flex-col items-center",
-        h1(`class` := "text-3xl font-bold mb-8", "Admin Login"),
+        title,
         message match
           case Some(msg) => div(`class` := "text-red-500 mb-4", msg)
           case None => (),
@@ -43,6 +47,8 @@ object AdminLoginPage:
         linksToOtherPages
       )
     )
+
+  def title: Frag = h1(`class` := "text-3xl font-bold mb-8", "Admin Login")
   private def linksToOtherPages: Frag =
     div(
       `class` := "flex",

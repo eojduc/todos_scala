@@ -1,7 +1,4 @@
 
-
-
-
 to start, you need a postgres db on your system. I used https://postgresapp.com/ to install 
 
 there is a file called db.sql in the root of this project. run that in your postgres db to create the tables

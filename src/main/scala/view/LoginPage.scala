@@ -1,26 +1,33 @@
 package view
 
 import cats.effect.IO
-import model.{User, Response, Request}
+import model.{Request, Response, User}
 import model.Uri.withError
 import org.http4s.implicits.{path, uri}
-import org.http4s.{Headers, Query, Status, Uri, UrlForm}
+import org.http4s.{Headers, HttpRoutes, Query, Status, Uri, UrlForm}
 import scalatags.Text.all.*
 import model.Request.*
 import model.Response.*
 import database.Connection
 import database.Users
+import org.http4s.dsl.io.*
+import database.Db
+import doobie.implicits.*
 
 
     
     
 object LoginPage:
-  def get(req: Request): Connection[Response] =
+
+  def routes(db: Db): HttpRoutes[IO] = HttpRoutes.of[IO]:
+    case req @ GET -> Root => get(req).transact(db)
+    case req @ POST -> Root => post(req).flatMap(_.transact(db))
+  private def get(request: Request): Connection[Response] =
     for users <- Users.findAll
-    yield req.getUser(users) match
+    yield request.getUser(users) match
       case Some(_) => Response.redirect(uri"/")
-      case None => page(req.params.get("error")).toResponse
-  def post(request: Request): IO[Connection[Response]] =
+      case None => page(request.params.get("error")).toResponse
+  private def post(request: Request): IO[Connection[Response]] =
     for form <- request.getForm
     yield for users <- Users.findAll
     yield (form.getFirst("username"), form.getFirst("password")) match
@@ -44,7 +51,7 @@ object LoginPage:
         error match
           case Some(err) => h2(`class` := "text-red-500 mb-4", err)
           case None => (),
-          formToLogIn,
+        formToLogIn,
         linksToOtherPages,
       )
     )

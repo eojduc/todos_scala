@@ -1,5 +1,6 @@
 package model
 
+import cats.Eq
 import cats.effect.IO
 import org.http4s.{Status, Uri, UrlForm}
 import fs2.Stream
@@ -8,6 +9,8 @@ type Request = org.http4s.Request[IO]
 type Response = org.http4s.Response[IO]
 type Client = org.http4s.client.Client[IO]
 
+    
+  
 
 object Request:
   extension (request: Request)
@@ -56,6 +59,7 @@ object Response:
 
 object Uri:
   extension (uri: Uri)
+    
     def withError(error: String): Uri =
       uri.withQueryParam("error", error)
 

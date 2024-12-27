@@ -10,6 +10,11 @@ object Todos:
     sql"select title, complete, ownerId, id from todos order by id"
       .query[Todo]
       .to[List]
+    
+  def findByOwner(ownerId: Int): Connection[List[Todo]] =
+    sql"select title, complete, ownerId, id from todos where ownerId = $ownerId order by id"
+      .query[Todo]
+      .to[List]
 
   def delete(id: Int): Connection[Unit] =
     sql"delete from todos where id = $id"
@@ -24,9 +29,9 @@ object Todos:
 
   def create(title: String, complete: Boolean, ownerId: Int): Connection[Todo] =
     sql"insert into todos (title, complete, ownerId) values ($title, $complete, $ownerId) returning id"
-        .query[Int]
-        .unique
-        .map(id => Todo(title, complete, ownerId, id))
+      .query[Int]
+      .unique
+      .map(id => Todo(title, complete, ownerId, id))
 
 
   def update(todo: Todo): Connection[Unit] =
