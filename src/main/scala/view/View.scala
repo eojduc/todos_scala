@@ -1,20 +1,10 @@
 package view
 
-import org.http4s.headers.`Content-Type`
-import org.http4s.MediaType
 import scalatags.Text.all.*
-import model.Response
 
-
-
-extension (fragment: Frag)
-  def  toResponse: Response =
-    Response.ok(
-      fs2.Stream(fragment.render).through(fs2.text.utf8.encode)
-    ).withContentType(`Content-Type`(MediaType.text.html))
 
 object View:
-  def layout(content: Frag): Frag =
+  def layout(content: Frag*): Frag =
     html(
       head(
         script(src := "https://cdn.tailwindcss.com"),
@@ -22,6 +12,9 @@ object View:
       ),
       body(
         `class` := "bg-gray-50",
-        content
+        div(
+          `class` := "container flex flex-col items-center",
+          content
+        )
       )
     )

@@ -1,41 +1,41 @@
 package view
 
 import cats.effect.IO
+import scalatags.Text.all.*
 import database.{Connection, Db, Todos, Users}
 import model.{Request, Response, Todo, User}
+import model.Request.{getForm, getUser}
+import model.Response.{removeCookies}
+import model.Frag.toResponse
 import org.http4s.implicits.uri
-import org.http4s.{EntityDecoder, EntityEncoder, HttpRoutes, Status, Uri, UrlForm}
-import scalatags.Text.all.*
-import model.Uri.*
+import org.http4s.{EntityDecoder, HttpRoutes, Status}
+import io.circe.generic.auto.deriveDecoder
 import model.User.*
-import model.Request.*
-import model.Response.*
+import model.Uri
 import cats.syntax.applicative.*
 import model.Client
 import model.Quote
 import org.http4s.circe.jsonOf
 import org.http4s.dsl.io.*
-import io.circe.generic.auto.deriveDecoder
-
-import doobie.implicits.*
+import util.*
 
 
 
 object HomePage:
   def routes(db: Db, client: Client): HttpRoutes[IO] = HttpRoutes.of[IO]:
-    case req @ GET -> Root => get(req, client).flatMap(_.transact(db))
+    case req @ GET -> Root => get(req, client).run(db)
     case GET -> Root / "logout" => logout.pure[IO]
-    case req @ POST -> Root / "todo" => post(req).flatMap(_.transact(db))
-    case POST -> Root / "todo" / IntVar(id) / "toggle" => toggle(id).transact(db)
+    case req @ POST -> Root / "todo" => post(req).run(db)
+    case POST -> Root / "todo" / IntVar(id) / "toggle" => toggle(id).run(db)
   private def logout: Response =
     Response.redirect(uri"/login")
       .removeCookies("userType", "username", "password", "code")
 
   given EntityDecoder[IO, List[Quote]] = jsonOf[IO, List[Quote]]
-  private def get(request: Request, client: Client): IO[Connection[Response]] =
-    for quotes <- client.expect[List[Quote]](uri"https://zenquotes.io/api/random")
+  private def get(request: Request, client: Client): Connection[Response] =
+    for quotes <- client.expect[List[Quote]](uri"https://zenquotes.io/api/random") |> Connection.fromIO
       quote = Quote.firstOrDefault(quotes)
-    yield for users <- Users.findAll
+      users <- Users.findAll
       todos <- Todos.findAll
     yield request.getUser(users) match
       case None => Response.redirect(uri"/login")
@@ -43,9 +43,9 @@ object HomePage:
       case Some(user) => page(user, todos, quote).toResponse
 
 
-  def toggle(id: Int): Connection[Response] =
+  private def toggle(id: Int): Connection[Response] =
     for todoOption <- Todos.find(id)
-        response <- todoOption match
+      response <- todoOption match
         case None => Response(Status.NotFound).pure[Connection]
         case Some(todo) =>
           for _ <- Todos.update(todo.toggle)
@@ -53,16 +53,16 @@ object HomePage:
     yield response
 
 
-  def post(request: Request): IO[Connection[Response]] =
-    for form <- request.as[UrlForm]
-    yield for
+  def post(request: Request): Connection[Response] =
+    for form <- request.getForm |> Connection.fromIO
       users <- Users.findAll
-      response <- request.getUser(users) match
+      response <- request.getUser(users)  match
         case None => Response
-          .redirect(uri"/login".withError("Log in to create a todo."))
-          .removeCookies("userType", "username", "password").pure[Connection]
+          .redirect(uri"/login"|> Uri.withError("Log in to create a todo."))
+          .removeCookies("userType", "username", "password")
+          |> Connection.pure
         case Some(user) => form.getFirst("title") match
-          case None => Response(Status.BadRequest).pure[Connection]
+          case None => Response(Status.BadRequest) |> Connection.pure
           case Some(title) =>
             for _ <- Todos.create(title, false, user.id)
               todos <- Todos.findByOwner(user.id)

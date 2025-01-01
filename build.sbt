@@ -8,7 +8,7 @@ envVars := Map(
     "DATABASE_URL" -> "jdbc:postgresql:todos",
     "DATABASE_USER" -> "postgres",
     "DATABASE_PASSWORD" -> "password",
-    "PORT" -> "3000",
+    "PORT" -> "3001",
     "HOST" -> "0.0.0.0"
 )
 Compile / run / fork := true

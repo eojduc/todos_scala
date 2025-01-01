@@ -2,38 +2,40 @@ package view
 
 import cats.effect.IO
 import model.{Request, Response, User}
-import model.Uri.withError
-import org.http4s.implicits.{path, uri}
-import org.http4s.{Headers, HttpRoutes, Query, Status, Uri, UrlForm}
+import org.http4s.implicits.uri
+import org.http4s.HttpRoutes
 import scalatags.Text.all.*
 import model.Request.*
-import model.Response.*
+import model.Response.{withCookies}
+import model.Frag.{toResponse}
 import database.Connection
 import database.Users
 import org.http4s.dsl.io.*
 import database.Db
-import doobie.implicits.*
+import util.*
+import model.Uri
 
+import model.Request.getUser
 
     
     
 object LoginPage:
 
   def routes(db: Db): HttpRoutes[IO] = HttpRoutes.of[IO]:
-    case req @ GET -> Root => get(req).transact(db)
-    case req @ POST -> Root => post(req).flatMap(_.transact(db))
+    case req @ GET -> Root => get(req).run(db)
+    case req @ POST -> Root => post(req).run(db)
   private def get(request: Request): Connection[Response] =
     for users <- Users.findAll
     yield request.getUser(users) match
       case Some(_) => Response.redirect(uri"/")
       case None => page(request.params.get("error")).toResponse
-  private def post(request: Request): IO[Connection[Response]] =
-    for form <- request.getForm
-    yield for users <- Users.findAll
+  private def post(request: Request): Connection[Response] =
+    for form <- Connection.fromIO(request.getForm)
+      users <- Users.findAll
     yield (form.getFirst("username"), form.getFirst("password")) match
       case (Some(username), Some(password)) =>
         users.findUser(username, password) match
-          case None => Response.redirect(uri"/login".withError("Invalid username or password"))
+          case None => Response.redirect(uri"/login" |> Uri.withError("Invalid username or password"))
           case Some(user) =>
             Response.redirect(uri"/")
               .withCookies(

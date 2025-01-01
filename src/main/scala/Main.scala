@@ -7,7 +7,6 @@ import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.server.middleware.ErrorAction
 import view.{AdminLoginPage, HomePage, LoginPage, RegisterPage}
 import org.http4s.server.Router
-import cats.effect.Resource
 import doobie.Transactor
 
 val host = sys.env.get("HOST")
@@ -25,27 +24,9 @@ val db = Transactor.fromDriverManager[IO](
   password = sys.env.getOrElse("DATABASE_PASSWORD", "password"),
   logHandler = None
 )
-def runServer: Resource[IO, Unit] = for
-  client <- EmberClientBuilder.default[IO].build
-  app = ErrorAction.httpRoutes[IO](
-    Router(
-      "/" -> HomePage.routes(db, client),
-      "/login" -> LoginPage.routes(db),
-      "/register" -> RegisterPage.routes(db),
-      "/admin-login" -> AdminLoginPage.routes(db)
-    ),
-    (req, thr) => IO.println("Oops: " ++ thr.toString)
-  ).orNotFound
-  _ <- EmberServerBuilder
-    .default[IO]
-    .withHost(host)
-    .withPort(port)
-    .withHttpApp(app)
-    .build
-yield ()
 object Main extends IOApp:
   def run(args: List[String]): IO[ExitCode] =
-    val op = for 
+    val resource = for 
       client <- EmberClientBuilder.default[IO].build
       app = ErrorAction.httpRoutes[IO](
         Router(
@@ -63,4 +44,4 @@ object Main extends IOApp:
         .withHttpApp(app)
         .build
     yield ()
-    op.useForever.as(ExitCode.Success)
+    resource.useForever.as(ExitCode.Success)
