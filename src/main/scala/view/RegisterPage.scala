@@ -1,20 +1,13 @@
 package view
 
 import cats.effect.IO
-import cats.syntax.applicative.given
+import cats.syntax.all.*
 import scalatags.Text.all.*
 import org.http4s.implicits.uri
-import database.Users
-import database.Connection
-import model.{Request, Response, User}
-import model.Response.{withCookies}
-import model.Frag.toResponse
 import org.http4s.HttpRoutes
-import org.http4s.dsl.io.{->, GET, POST, Root}
-import database.Db
-import util.*
-import model.Request.getForm
-import model.Uri
+import org.http4s.dsl.io.*
+import database.*
+import model.*
 
 
 
@@ -27,14 +20,14 @@ object RegisterPage:
 
 
   private def post(request: Request): Connection[Response] =
-    for form <- Connection.fromIO(request.getForm)
+    for form <- request.getForm.toConnection
       users <- Users.findAll
       response <- (form.getFirst("username"), form.getFirst("password")) match
         case (Some(username), Some(password)) =>
           val existingUser = users.collect({ case u: User.Normal => u})
             .find(_.username == username)
           existingUser match
-            case Some(_) => Response.redirect(uri"/register" |> Uri.withError("Username already exists")).pure[Connection]
+            case Some(_) => Response.redirect(uri"/register".withError("Username already exists")).pure[Connection]
             case None => 
               for _ <- Users.insert(Users.Insert.Normal(username, password))
               yield Response.redirect(uri"/")
@@ -43,51 +36,60 @@ object RegisterPage:
                   "username" -> username, 
                   "password" -> password
                 )
-        case _ => Response.redirect(uri"/register" |> Uri.withError("Invalid form")).pure[Connection]
+        case _ => Response.redirect(uri"/register".withError("Invalid form")).pure[Connection]
     yield response
   private def page(message: Option[String]): Frag =
     View.layout(
-      h1(`class` := "text-3xl font-bold mb-8", "Register"),
-      message match
-        case Some(msg) => h2(`class` := "text-red-500 mb-4", msg)
-        case None => (),
-      submitForm,
-      loginButtons
+      div(
+        `class` := "card card-normal m-16 bg-base-200",
+        div(
+          `class` := "card-body items-center",
+          h1(`class` := "card-title", "Register"),
+          message match
+            case Some(msg) => h2(`class` := "alert alert-error", msg)
+            case None => (),
+            submitForm,
+          loginButtons
+        )
+      )
     )
 
   private def submitForm: Frag =
     form(
-      `class` := "flex",
+      `class` := "contents",
       method := "post",
       action := "/register",
       input(
-        `class` := "p-2 border rounded-lg",
+        `class` := "input",
         `type` := "text",
         name := "username",
         placeholder := "Username"
       ),
       input(
-        `class` := "p-2 border rounded-lg ml-2",
+        `class` := "input",
         `type` := "password",
         name := "password",
         placeholder := "Password"
       ),
-      input(
-        `type` := "submit",
-        `class` := "p-2 bg-blue-500 text-white rounded-lg ml-2",
-        value := "Register"
+      div(
+        `class` := "flex flex-row justify-end w-full",
+        input(
+          `type` := "submit",
+          `class` := "btn btn-primary",
+          value := "Register"
+        )
       )
     )
   private def loginButtons: Frag =
     div(
-      `class` := "mt-4",
+      `class` := "card-actions",
       a(
-        `class` := "text-blue-500",
+        `class` := "link link-primary",
         href := "/login",
         "Login here"
       ),
       a(
-        `class` := "text-blue-500 ml-4",
+        `class` := "link link-primary",
         href := "/admin-login",
         "Admin login"
       )

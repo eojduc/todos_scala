@@ -1,24 +1,23 @@
 package database
 
 import doobie.implicits.toSqlInterpolator
-import model.User
-import util.*
+import model.*
 
 object Users:
 
 
   def findAll: Connection[List[User]] =
-    (for
+    val users = for
       normal <- sql"select username, password, id from normal_users".query[User.Normal].to[List]
       admin <- sql"select code from admin_users".query[User.Admin].to[List]
-    yield normal ++ admin)
-    |> Connection.fromConnectionIO
+    yield normal ++ admin
+    users.toConnection
 
   def find(id: Int): Connection[Option[User.Normal]] =
     sql"select username, password, id from normal_users where id = $id"
       .query[User.Normal]
       .option
-      |> Connection.fromConnectionIO
+      .toConnection
 
   enum Insert:
     case Normal(username: String, password: String)
@@ -34,12 +33,12 @@ object Users:
       ).update
       .run
       .map(_ => ())
-      |> Connection.fromConnectionIO
+      .toConnection
 
 
   def delete(id: Int): Connection[Unit] =
     sql"delete from normal_users where id = $id".update.run.map(_ => ())
-      |> Connection.fromConnectionIO
+      .toConnection
 
   def update: User => Connection[Unit] =
     case User.Normal(username, password, id) =>
@@ -47,10 +46,10 @@ object Users:
         .update
         .run
         .map(_ => ())
-        |> Connection.fromConnectionIO
+        .toConnection
     case User.Admin(code) =>
       sql"update admin_users set code = $code".update.run.map(_ => ())
-        |> Connection.fromConnectionIO
+        .toConnection
 
 
 
