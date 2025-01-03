@@ -25,4 +25,5 @@ case object RegisterRoutes extends cask.Routes:
               "password" -> password.value
             )
         case Some(_) => view.registerPage(Some("User already exists")).toResponse
+
   initialize()

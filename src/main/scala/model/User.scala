@@ -1,4 +1,5 @@
 package model
+
 import scalasql.PostgresDialect.*
 
 case class NormalUsers[T[_]]

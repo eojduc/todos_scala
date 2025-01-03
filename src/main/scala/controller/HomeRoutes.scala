@@ -35,4 +35,5 @@ case object HomeRoutes extends cask.Routes:
         val toggled = todo.toggle
         Todos.updateTodo(toggled)
         view.todoCard(toggled).toResponse
+
   initialize()

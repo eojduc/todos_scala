@@ -1,6 +1,7 @@
 package view
 
 import scalatags.Text.all.*
+
 def registerPage(message: Option[String]) =
   layout(
     div(

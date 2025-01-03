@@ -20,7 +20,6 @@ def adminLoginPage(message: Option[String]): doctype =
   )
 
 
-
 private def loginAndRegisterLinks =
   div(
     `class` := "card-actions",

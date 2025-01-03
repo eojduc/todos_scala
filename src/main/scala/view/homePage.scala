@@ -3,7 +3,7 @@ package view
 import model.*
 import scalatags.Text.all.*
 
-def homePage(user: User, todos: Seq[Todo], quote: Quote)  =
+def homePage(user: User, todos: Seq[Todo], quote: Quote) =
   layout(
     header(user),
     div(

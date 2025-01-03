@@ -11,5 +11,5 @@ extension [T](response: cask.Response[T])
     )
 
 
-extension (res : cask.Response.type)
+extension (res: cask.Response.type)
   def seeOther(location: String) = cask.Response("", statusCode = 303, headers = Seq("Location" -> location))

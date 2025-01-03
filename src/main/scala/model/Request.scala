@@ -16,7 +16,7 @@ extension (request: cask.Request)
           user <- Users.getAdminByCode(code)
         yield user
       case _ => None
-      
-    
+
+
   def getCookie(name: String): Option[String] =
     request.cookies.get(name).map(_.value)

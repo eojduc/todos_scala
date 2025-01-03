@@ -8,7 +8,7 @@ case object LoginRoutes extends cask.Routes:
     request.getUser match
       case Some(_) => cask.Response.seeOther("/")
       case None => view.loginPage(error).toResponse
-  
+
   @cask.postForm("/login")
   def login(username: cask.FormValue, password: cask.FormValue) =
     val normalUser = Users.findUser(username.value, password.value)
@@ -21,5 +21,6 @@ case object LoginRoutes extends cask.Routes:
             "password" -> password.value
           )
       case None => cask.Response.seeOther("/login?error=Invalid username or password")
+
   initialize()
 

@@ -2,7 +2,7 @@ package model
 
 import upickle.default as upickle
 
-case class Quote(q: String, a: String) derives upickle.ReadWriter
+case class Quote(q: String, a: String)derives upickle.ReadWriter
 
 
 def getQuote(): Quote =
