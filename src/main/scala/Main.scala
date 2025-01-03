@@ -8,6 +8,15 @@ import org.http4s.server.middleware.ErrorAction
 import view.{AdminLoginPage, HomePage, LoginPage, RegisterPage}
 import org.http4s.server.Router
 import doobie.Transactor
+import database.*
+import scalatags.Text.all.*
+import scalatags.Text.all.Frag
+import view.*
+import database.simple.*
+import routes.*
+
+import scalasql.dialects.PostgresDialect.*
+import scalasql.*
 
 val host = sys.env.get("HOST")
   .flatMap(IpAddress.fromString)
@@ -45,3 +54,10 @@ object Main extends IOApp:
         .build
     yield ()
     resource.useForever.as(ExitCode.Success)
+
+
+
+object MinimalRoutesMain extends cask.Main{
+  printTodos()
+  val allRoutes = Seq(AdminLoginRoutes(), LoginRoutes(), RegisterRoutes(), HomeRoutes())
+}

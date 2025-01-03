@@ -34,7 +34,7 @@ object LoginPage:
               )
       case _ => Response.badRequest("Invalid form data")
   
-  private def page(error: Option[String]): Frag =
+  def page(error: Option[String]): Frag =
     View.layout(
       div(
         `class` := "card card-normal bg-base-200 m-16",

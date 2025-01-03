@@ -11,6 +11,8 @@ import org.http4s.implicits.uri
 import org.http4s.{EntityDecoder, HttpRoutes, Status}
 import scalatags.Text.all.*
 
+
+
 object HomePage:
   def routes(db: Db, client: Client): HttpRoutes[IO] = HttpRoutes.of[IO]:
     case req @ GET -> Root => get(req, client).run(db)

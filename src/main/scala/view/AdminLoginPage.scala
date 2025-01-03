@@ -9,6 +9,8 @@ import org.http4s.dsl.io.*
 import org.http4s.implicits.uri
 import scalatags.Text.all.*
 
+
+
 object AdminLoginPage:
 
   def routes(db: Db): HttpRoutes[IO] = HttpRoutes.of[IO]:
@@ -17,7 +19,23 @@ object AdminLoginPage:
 
   private def get(request: Request): Response = page(request.params.get("error")).toResponse
 
-  private def page(message: Option[String]): Frag =
+
+  private def post(request: Request): Connection[Response] =
+    for form <- request.getForm.toConnection
+        users <- Users.findAll
+    yield form.getFirst("code") match
+      case None => Response.redirect(uri"/admin-login".withError("Code is required"))
+      case Some(code) => users.findAdmin(code) match
+        case None =>
+          Response.redirect(uri"/admin-login".withError("Invalid code"))
+        case Some(user) =>
+          Response.redirect(uri"/")
+            .withCookies(
+              "userType" -> "admin",
+              "code" -> user.code
+            )
+
+  def page(message: Option[String]): Frag =
     View.layout(
       div(
         `class` := "card card-normal bg-base-200 m-16",
@@ -48,21 +66,6 @@ object AdminLoginPage:
         "Register"
       )
     )
-
-  private def post(request: Request): Connection[Response] =
-    for form <- request.getForm.toConnection
-        users <- Users.findAll
-    yield form.getFirst("code") match
-      case None => Response.redirect(uri"/admin-login".withError("Code is required"))
-      case Some(code) => users.findAdmin(code) match
-        case None =>
-          Response.redirect(uri"/admin-login".withError("Invalid code"))
-        case Some(user) =>
-          Response.redirect(uri"/")
-            .withCookies(
-              "userType" -> "admin",
-              "code" -> user.code
-            )
 
   private def adminLoginForm: Frag =
     form(
